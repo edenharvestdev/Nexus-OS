@@ -19,6 +19,7 @@ describe("Playwright harness regression guard", () => {
     expect(config).toContain('const baseURL = "http://127.0.0.1:3000";');
     expect(config).toContain("baseURL,");
     expect(config).toContain("webServer: {");
+    expect(config).toContain("reuseExistingServer: false");
     expect(config).not.toContain("PLAYWRIGHT_BASE_URL");
   });
 
@@ -29,6 +30,9 @@ describe("Playwright harness regression guard", () => {
     };
 
     expect(workflow).not.toContain("PLAYWRIGHT_BASE_URL");
+    expect(workflow).toMatch(
+      /name: unit-coverage\n\s+path: coverage\/\n\s+if-no-files-found: warn\n\s+retention-days: 3/,
+    );
     expect(packageJson.scripts.lint).toMatch(/--max-warnings\s+\d+/);
   });
 });
