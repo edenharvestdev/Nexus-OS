@@ -20,13 +20,23 @@ All external integrations default **OFF**:
 - `FEATURE_EMAIL_ENABLED=false`
 - `FEATURE_AUTOMATION_ENABLED=false`
 
-Payment webhook handling verifies HMAC-SHA256 over `<timestamp>.<rawBody>`, enforces a maximum timestamp age, uses constant-time comparison, and requires an atomic durable replay claim. Email is behind a provider port. Automation requires a database-backed job store with unique idempotency keys and persisted leases; an in-memory worker claim is not an allowed implementation. Health checks distinguish configuration from successful live probes.
+Payment webhook handling signs a canonical JSON array containing `"nexus-payment-webhook-v1"`, provider, event ID, timestamp, and the exact raw body. It rejects malformed, future, and stale timestamps before processing. Processing requires a durable inbox adapter that atomically begins a fenced lease, marks successful work complete, releases retryable failures, and permanently rejects completed replays. This branch defines only that port: it does not claim or enable a concrete database adapter. Email is behind a provider port. Automation requires a database-backed job store with unique idempotency keys and persisted leases; an in-memory worker claim is not an allowed implementation. Health checks distinguish configuration from successful live probes.
 
 No provider adapter, credential, webhook route, email send, worker, or integration activation is included.
 
 ## Phase 6 release commands
 
-These commands validate or prepare evidence; none deploys:
+These commands run the Product/Integration/Release evidence gate and its individual checks; none deploys:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+# Equivalent combined gate:
+npm run quality
+```
+
+These release commands validate or prepare evidence; none deploys:
 
 ```bash
 node scripts/release/validate-environment.mjs

@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:product": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/product/*.test.ts",
+    "test:integration": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/integrations/*.test.ts",
+    "test:release": "node --test tests/release/*.test.mjs",
+    "test": "npm run test:product && npm run test:integration && npm run test:release",
+    "quality": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
