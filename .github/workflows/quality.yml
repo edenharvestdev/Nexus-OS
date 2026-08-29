@@ -1,0 +1,79 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - dev
+      - "phase/**"
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint, test, build, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+      - run: npm run audit
+      - name: Retain unit-test coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-coverage
+          path: coverage/
+          if-no-files-found: warn
+
+  authenticated-e2e:
+    name: Authenticated Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
+      E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
+      E2E_CLIENT_A_EMAIL: ${{ secrets.E2E_CLIENT_A_EMAIL }}
+      E2E_CLIENT_A_PASSWORD: ${{ secrets.E2E_CLIENT_A_PASSWORD }}
+      E2E_CLIENT_B_EMAIL: ${{ secrets.E2E_CLIENT_B_EMAIL }}
+      E2E_CLIENT_B_PASSWORD: ${{ secrets.E2E_CLIENT_B_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Retain Playwright report and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

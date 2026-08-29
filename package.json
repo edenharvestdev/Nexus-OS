@@ -6,8 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -17,7 +23,7 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.4.7",
     "lucide-react": "^0.475.0",
-    "next": "^16.2.11",
+    "next": "^16.3.3",
     "next-themes": "^0.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -27,14 +33,17 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.0.7",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^9.20.1",
-    "eslint-config-next": "15.1.7",
+    "eslint-config-next": "^16.3.3",
     "postcss": "^8.5.2",
     "tailwindcss": "^4.0.7",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
   }
 }

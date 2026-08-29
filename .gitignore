@@ -24,6 +24,12 @@
 *.tsbuildinfo
 next-env.d.ts
 
+# Test artifacts
+/coverage/
+/playwright-report/
+/test-results/
+/blob-report/
+
 # OS metadata
 .DS_Store
 Thumbs.db

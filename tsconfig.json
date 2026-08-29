@@ -32,12 +32,11 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "vitest.config.mts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "tests",
-    "playwright.config.ts"
+    "node_modules"
   ]
 }
