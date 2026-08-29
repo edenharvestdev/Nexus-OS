@@ -93,6 +93,10 @@ test("security migration protects role authority and tenant tables", () => {
   assert.match(migration, /REVOKE UPDATE ON public\.support_tickets FROM authenticated/i);
   assert.match(migration, /GRANT UPDATE \(status, read_at\)[\s\S]*public\.notifications TO authenticated/i);
   assert.match(migration, /prevent_client_notification_mutation/i);
+  assert.match(
+    migration,
+    /ALTER TABLE public\.service_credentials[\s\S]*ADD COLUMN IF NOT EXISTS login_url[\s\S]*ADD COLUMN IF NOT EXISTS secret_notes[\s\S]*GRANT SELECT/i,
+  );
 });
 
 test("middleware and auth callback never trust user metadata for roles", () => {

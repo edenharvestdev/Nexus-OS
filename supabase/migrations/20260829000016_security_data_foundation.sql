@@ -238,8 +238,17 @@ CREATE TRIGGER prevent_client_notification_mutation
   BEFORE UPDATE ON public.notifications
   FOR EACH ROW EXECUTE FUNCTION public.prevent_client_notification_mutation();
 
--- Existing rows may contain unverified plaintext. Browser roles can select only
--- non-secret metadata; application decryption remains server-only.
+-- Existing rows may contain unverified plaintext. Normalize the historical
+-- service_credentials shape before referencing columns introduced by later UI.
+ALTER TABLE public.service_credentials
+  ADD COLUMN IF NOT EXISTS login_url TEXT,
+  ADD COLUMN IF NOT EXISTS secret_notes TEXT;
+ALTER TABLE public.service_credentials
+  ALTER COLUMN credential_type SET DEFAULT 'login',
+  ALTER COLUMN encrypted_password DROP NOT NULL;
+
+-- Browser roles can select only non-secret metadata; application decryption
+-- remains server-only.
 REVOKE SELECT ON public.service_credentials FROM anon, authenticated;
 GRANT SELECT (id, service_id, credential_name, username, login_url,
               is_client_visible, created_at, updated_at)
