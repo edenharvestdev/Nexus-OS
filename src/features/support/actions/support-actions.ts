@@ -228,7 +228,6 @@ export async function createSupportTicketAction(values: {
       category: dept,
       department: dept,
       priority: prio,
-      status: "open",
       created_by: user.id,
     })
     .select()
@@ -266,15 +265,18 @@ export async function addTicketMessageAction(
     return { success: false, error: "Unauthorized attempt to create internal note." };
   }
 
-  const { error } = await supabase.from("ticket_messages").insert({
+  const messageData = {
     ticket_id: ticketId,
     sender_id: user.id,
-    sender_name: user.fullName || user.email,
-    sender_role: user.role,
     message,
-    is_internal: isInternal,
     attachments,
-  });
+    ...(user.role === "admin" ? {
+      sender_name: user.fullName || user.email,
+      sender_role: user.role,
+      is_internal: isInternal,
+    } : {}),
+  };
+  const { error } = await supabase.from("ticket_messages").insert(messageData);
 
   if (error) {
     return { success: false, error: `Failed to post reply: ${error.message}` };

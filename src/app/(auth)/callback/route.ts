@@ -2,14 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveDatabaseRole } from "@/lib/auth/authorization";
 import { USER_ROLES } from "@/constants/auth";
+import { normalizeCallbackPath } from "@/lib/auth/callback-path";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const requestedNext = requestUrl.searchParams.get("next");
-  const safeNext = requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
-    ? requestedNext
-    : "/client";
+  const safeNext = normalizeCallbackPath(requestUrl.searchParams.get("next"));
 
   if (code) {
     const supabase = await createServerSupabaseClient();

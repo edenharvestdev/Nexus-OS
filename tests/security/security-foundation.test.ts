@@ -8,11 +8,7 @@ import {
   authorizeTenantAccess,
   resolveDatabaseRole,
 } from "../../src/lib/auth/authorization";
-import {
-  protectCredential,
-  revealCredential,
-  type CredentialSecretProvider,
-} from "../../src/lib/security/credential-secret-provider";
+import { normalizeCallbackPath } from "../../src/lib/auth/callback-path";
 
 const validRegistration = {
   fullName: "Client User",
@@ -58,23 +54,25 @@ test("authorization matrix denies cross-account and unauthenticated access", () 
   assert.equal(authorizeTenantAccess(null, "client-a", "client-a"), false);
 });
 
-test("credential handling fails closed without an approved server provider", async () => {
-  await assert.rejects(() => protectCredential("secret"), /provider is not configured/i);
-  await assert.rejects(() => revealCredential("protected"), /provider is not configured/i);
+test("credential provider is server-only, fail-closed, and has no caller override", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/lib/security/credential-secret-provider.ts"),
+    "utf8",
+  );
+
+  assert.match(source, /^import ["']server-only["'];/m);
+  assert.match(source, /provider is not configured/i);
+  assert.doesNotMatch(source, /protectCredential\([\s\S]*?provider\??:/i);
+  assert.doesNotMatch(source, /revealCredential\([\s\S]*?provider\??:/i);
 });
 
-test("credential handling delegates to an explicitly supplied provider", async () => {
-  const provider: CredentialSecretProvider = {
-    async protect(value) {
-      return `vault:${value}`;
-    },
-    async reveal(value) {
-      return value.replace(/^vault:/, "");
-    },
-  };
-
-  assert.equal(await protectCredential("secret", provider), "vault:secret");
-  assert.equal(await revealCredential("vault:secret", provider), "secret");
+test("auth callback accepts only normalized same-origin paths", () => {
+  assert.equal(normalizeCallbackPath("/client/tickets?open=1"), "/client/tickets?open=1");
+  assert.equal(normalizeCallbackPath("//evil.example/path"), "/client");
+  assert.equal(normalizeCallbackPath("/\\evil.example/path"), "/client");
+  assert.equal(normalizeCallbackPath("/%5cevil.example/path"), "/client");
+  assert.equal(normalizeCallbackPath("\\evil.example/path"), "/client");
+  assert.equal(normalizeCallbackPath("https://evil.example/path"), "/client");
 });
 
 test("security migration protects role authority and tenant tables", () => {
@@ -88,6 +86,13 @@ test("security migration protects role authority and tenant tables", () => {
   assert.match(migration, /service_credentials[\s\S]*ENABLE ROW LEVEL SECURITY/i);
   assert.match(migration, /notifications[\s\S]*client_id[\s\S]*auth\.uid\(\)/i);
   assert.match(migration, /ticket_messages[\s\S]*WITH CHECK/i);
+  assert.match(migration, /DROP POLICY IF EXISTS "client_insert_tickets"/i);
+  assert.match(migration, /DROP POLICY IF EXISTS "client_insert_messages"/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.handle_new_user/i);
+  assert.match(migration, /DROP TRIGGER IF EXISTS on_auth_user_created ON auth\.users/i);
+  assert.match(migration, /REVOKE UPDATE ON public\.support_tickets FROM authenticated/i);
+  assert.match(migration, /GRANT UPDATE \(status, read_at\)[\s\S]*public\.notifications TO authenticated/i);
+  assert.match(migration, /prevent_client_notification_mutation/i);
 });
 
 test("middleware and auth callback never trust user metadata for roles", () => {
@@ -100,9 +105,9 @@ test("middleware and auth callback never trust user metadata for roles", () => {
   assert.match(callback, /from\("profiles"\)/i);
 });
 
-test("new-user trigger never trusts role metadata", () => {
+test("forward migration replaces the new-user trigger without trusting role metadata", () => {
   const migration = readFileSync(
-    join(process.cwd(), "supabase/migrations/20260722000001_phase3_auth_profiles.sql"),
+    join(process.cwd(), "supabase/migrations/20260829000016_security_data_foundation.sql"),
     "utf8",
   );
 

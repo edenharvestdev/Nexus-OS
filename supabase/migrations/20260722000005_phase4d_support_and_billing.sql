@@ -25,18 +25,7 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ticket_messages ENABLE ROW LEVEL SECURITY;
 
--- Admins full access. Drop first so a safely retried migration cannot fail on
--- policy names already created by an interrupted run.
-DROP POLICY IF EXISTS "admin_all_invoices" ON public.invoices;
-DROP POLICY IF EXISTS "admin_all_invoice_items" ON public.invoice_items;
-DROP POLICY IF EXISTS "admin_all_support_tickets" ON public.support_tickets;
-DROP POLICY IF EXISTS "admin_all_ticket_messages" ON public.ticket_messages;
-DROP POLICY IF EXISTS "client_select_own_invoices" ON public.invoices;
-DROP POLICY IF EXISTS "client_select_own_tickets" ON public.support_tickets;
-DROP POLICY IF EXISTS "client_insert_tickets" ON public.support_tickets;
-DROP POLICY IF EXISTS "client_select_messages" ON public.ticket_messages;
-DROP POLICY IF EXISTS "client_insert_messages" ON public.ticket_messages;
-
+-- Admins full access
 CREATE POLICY "admin_all_invoices" ON public.invoices FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );

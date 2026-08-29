@@ -1,3 +1,5 @@
+import "server-only";
+
 /** Server-side provider boundary. Never import this module into client components. */
 export interface CredentialSecretProvider {
   protect(value: string): Promise<string>;
@@ -11,24 +13,17 @@ export function configureCredentialSecretProvider(provider: CredentialSecretProv
   configuredProvider = provider;
 }
 
-function requireProvider(provider?: CredentialSecretProvider): CredentialSecretProvider {
-  const selectedProvider = provider ?? configuredProvider;
-  if (!selectedProvider) {
+function requireProvider(): CredentialSecretProvider {
+  if (!configuredProvider) {
     throw new Error("Approved credential secret provider is not configured.");
   }
-  return selectedProvider;
+  return configuredProvider;
 }
 
-export async function protectCredential(
-  value: string,
-  provider?: CredentialSecretProvider,
-): Promise<string> {
-  return requireProvider(provider).protect(value);
+export async function protectCredential(value: string): Promise<string> {
+  return requireProvider().protect(value);
 }
 
-export async function revealCredential(
-  value: string,
-  provider?: CredentialSecretProvider,
-): Promise<string> {
-  return requireProvider(provider).reveal(value);
+export async function revealCredential(value: string): Promise<string> {
+  return requireProvider().reveal(value);
 }
