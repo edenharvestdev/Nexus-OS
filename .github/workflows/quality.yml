@@ -38,10 +38,13 @@ jobs:
 
   authenticated-e2e:
     name: Authenticated Playwright
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL }}
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.E2E_SUPABASE_ANON_KEY }}
       E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL }}
       E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
       E2E_CLIENT_A_EMAIL: ${{ secrets.E2E_CLIENT_A_EMAIL }}
@@ -55,6 +58,30 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Validate dedicated test configuration
+        shell: bash
+        run: |
+          required=(
+            NEXT_PUBLIC_SUPABASE_URL
+            NEXT_PUBLIC_SUPABASE_ANON_KEY
+            E2E_ADMIN_EMAIL
+            E2E_ADMIN_PASSWORD
+            E2E_CLIENT_A_EMAIL
+            E2E_CLIENT_A_PASSWORD
+            E2E_CLIENT_B_EMAIL
+            E2E_CLIENT_B_PASSWORD
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            joined=$(IFS=,; echo "${missing[*]}")
+            echo "::error::Authenticated E2E is fail-closed: missing required repository secrets for ${joined}."
+            exit 1
+          fi
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
       - name: Retain Playwright report and traces
@@ -66,6 +93,7 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: warn
+          retention-days: 3
 
   secret-scan:
     name: Secret scan

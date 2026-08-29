@@ -1,4 +1,4 @@
-import { expect, test as base, type Browser, type Page } from "@playwright/test";
+import { expect, test as base, type Page } from "@playwright/test";
 
 type Actor = "admin" | "clientA" | "clientB";
 
@@ -43,19 +43,12 @@ async function authenticate(page: Page, actor: Actor): Promise<void> {
 }
 
 async function authenticatedPage(
-  browser: Browser,
+  page: Page,
   actor: Actor,
   provide: (page: Page) => Promise<void>,
 ): Promise<void> {
-  const context = await browser.newContext();
-  const page = await context.newPage();
-
-  try {
-    await authenticate(page, actor);
-    await provide(page);
-  } finally {
-    await context.close();
-  }
+  await authenticate(page, actor);
+  await provide(page);
 }
 
 export const test = base.extend<{
@@ -63,9 +56,9 @@ export const test = base.extend<{
   clientAPage: Page;
   clientBPage: Page;
 }>({
-  adminPage: async ({ browser }, use) => authenticatedPage(browser, "admin", use),
-  clientAPage: async ({ browser }, use) => authenticatedPage(browser, "clientA", use),
-  clientBPage: async ({ browser }, use) => authenticatedPage(browser, "clientB", use),
+  adminPage: async ({ page }, use) => authenticatedPage(page, "admin", use),
+  clientAPage: async ({ page }, use) => authenticatedPage(page, "clientA", use),
+  clientBPage: async ({ page }, use) => authenticatedPage(page, "clientB", use),
 });
 
 export { expect };
