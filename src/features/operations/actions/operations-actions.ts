@@ -10,6 +10,8 @@ import {
 import { requireAdmin } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { runSupabaseHealthCheck } from "@/lib/supabase/health";
+import { readIntegrationFeatureFlags } from "@/server/integrations/feature-flags";
 
 function getAdmin() {
   return createAdminClient() as any;
@@ -19,48 +21,33 @@ export async function getOperationsOverviewAction() {
   await requireAdmin();
   const supabase = getAdmin();
 
-  // Run live diagnostic checks
-  const dbStart = Date.now();
-  const { data: dbData, error: dbErr } = await supabase.from("system_settings").select("category").limit(1);
-  const dbLatency = Date.now() - dbStart;
-
-  const { data: maintData } = await supabase.from("maintenance_mode").select("*").limit(1).maybeSingle();
-  const { count: unresolvedCount } = await supabase.from("system_error_logs").select("id", { count: "exact", head: true }).eq("status", "unresolved");
-
-  const healthChecks: SystemHealthCheck[] = [
-    {
-      id: "hc-db",
-      serviceName: "database",
-      status: dbErr ? "degraded" : "operational",
-      latencyMs: Math.max(dbLatency, 10),
-      lastCheckedAt: new Date().toISOString(),
-      message: dbErr ? `DB error: ${dbErr.message}` : "Supabase PostgreSQL v15 responsive.",
-    },
-    {
-      id: "hc-storage",
-      serviceName: "storage",
-      status: "operational",
-      latencyMs: 28,
-      lastCheckedAt: new Date().toISOString(),
-      message: "Supabase Storage buckets online.",
-    },
-    {
-      id: "hc-email",
-      serviceName: "email",
-      status: "operational",
-      latencyMs: 88,
-      lastCheckedAt: new Date().toISOString(),
-      message: "Resend Transactional Email Infrastructure ready.",
-    },
-    {
-      id: "hc-automation",
-      serviceName: "automation",
-      status: "operational",
-      latencyMs: 38,
-      lastCheckedAt: new Date().toISOString(),
-      message: "Event Dispatcher & Job Queue operational.",
-    },
-  ];
+  const [healthReport, maintenanceResult, errorsResult] = await Promise.all([
+    runSupabaseHealthCheck(),
+    supabase.from("maintenance_mode").select("*").limit(1).maybeSingle(),
+    supabase.from("system_error_logs").select("id", { count: "exact", head: true }).eq("status", "unresolved"),
+  ]);
+  const maintData = maintenanceResult.data;
+  const unresolvedCount = errorsResult.count;
+  const checkedAt = healthReport.checkedAt;
+  const healthChecks: SystemHealthCheck[] = healthReport.services.map((service) => ({
+    id: `hc-${service.name}`,
+    serviceName: service.name,
+    status: service.status === "healthy" ? "operational" : service.status === "unhealthy" ? "outage" : "degraded",
+    latencyMs: service.latencyMs,
+    lastCheckedAt: checkedAt,
+    message: service.message,
+  }));
+  const flags = readIntegrationFeatureFlags();
+  for (const [name, enabled] of Object.entries(flags)) {
+    healthChecks.push({
+      id: `hc-${name}`,
+      serviceName: name,
+      status: "degraded",
+      latencyMs: 0,
+      lastCheckedAt: checkedAt,
+      message: enabled ? "Enabled, but no provider-specific health probe is registered." : "Disabled by feature flag.",
+    });
+  }
 
   const maintenanceMode: MaintenanceConfig = {
     isEnabled: Boolean(maintData?.is_enabled),
@@ -70,14 +57,16 @@ export async function getOperationsOverviewAction() {
   };
 
   const payload: OperationsOverviewPayload = {
-    systemUptimePercent: 99.98,
+    systemUptimePercent: healthChecks.length === 0
+      ? 0
+      : Math.round((healthChecks.filter((check) => check.status === "operational").length / healthChecks.length) * 10_000) / 100,
     healthChecks,
     unresolvedErrorsCount: unresolvedCount || 0,
     maintenanceMode,
     nodeEnv: process.env.NODE_ENV || "production",
-    supabaseRegion: "ap-southeast-1 (Singapore)",
-    databaseVersion: "PostgreSQL 15.6",
-    nextVersion: "Next.js 14.2 (App Router)",
+    supabaseRegion: "Configured by Supabase project",
+    databaseVersion: "Not exposed by health probe",
+    nextVersion: "Next.js 16",
   };
 
   return { success: true, data: payload };

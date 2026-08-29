@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "<ISO-8601>",
+  "status": "planned",
+  "commit": "<git-sha>",
+  "executor": "<human-or-ci-identity>",
+  "environment": "<staging-or-production>",
+  "tests": [
+    "<exact command and artifact link>"
+  ],
+  "dbImpact": "<none-or-migration-identifiers>",
+  "rollbackVersion": "<known-good-git-sha>",
+  "approver": "<explicit-human-approver>",
+  "postDeployEvidence": []
+}
