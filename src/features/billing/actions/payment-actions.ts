@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireClient, requireAdmin, requireAuth } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   PaymentRecord,
   PaymentFilters,
@@ -42,7 +43,7 @@ function mapRowToPayment(row: any): PaymentRecord {
  */
 export async function getPaymentsAction(filters: PaymentFilters = {}) {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   let query = supabase
     .from("payments")
@@ -57,7 +58,7 @@ export async function getPaymentsAction(filters: PaymentFilters = {}) {
     const { data: clientRec } = await supabase
       .from("clients")
       .select("id")
-      .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+      .eq("profile_id", user.id)
       .limit(1)
       .maybeSingle();
 
@@ -120,7 +121,7 @@ export async function getPaymentsAction(filters: PaymentFilters = {}) {
  */
 export async function getPaymentDetailsAction(paymentId: string) {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data: paymentRow, error } = await supabase
     .from("payments")

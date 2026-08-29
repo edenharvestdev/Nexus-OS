@@ -10,7 +10,7 @@ import { FormField, FormLabel, FormError } from "@/components/ui/form";
 import { Lock, Mail, User, Building, ArrowRight, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { registerAction } from "../actions/register-action";
-import { USER_ROLES, UserRole } from "@/constants/auth";
+
 
 export function RegisterForm() {
   const router = useRouter();
@@ -20,7 +20,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>(USER_ROLES.CLIENT);
+
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -43,7 +43,6 @@ export function RegisterForm() {
         email,
         companyName,
         password,
-        role,
         agreeToTerms,
       });
 
@@ -55,18 +54,10 @@ export function RegisterForm() {
         return;
       }
 
-      toast.success("Account created successfully!", {
-        description: result.data.requiresEmailVerification
-          ? "Please check your inbox to verify your email."
-          : "Account ready. Redirecting...",
+      toast.success("Account request accepted.", {
+        description: "Contact an administrator for an invitation.",
       });
-
-      if (result.data.requiresEmailVerification) {
-        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-      } else {
-        const dest = role === USER_ROLES.ADMIN ? "/admin" : "/client";
-        router.push(dest);
-      }
+      router.push("/login");
     } catch (err: any) {
       setErrorMessage(err?.message || "Registration failed.");
     } finally {
@@ -168,18 +159,6 @@ export function RegisterForm() {
             </div>
           </FormField>
 
-          <FormField>
-            <FormLabel htmlFor="role">Account Role</FormLabel>
-            <select
-              id="role"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-              className="flex h-10 w-full rounded-xl border border-input bg-background/50 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value={USER_ROLES.CLIENT}>Client Portal Account</option>
-              <option value={USER_ROLES.ADMIN}>Administrator Account</option>
-            </select>
-          </FormField>
 
           <div className="flex items-start space-x-2 pt-2">
             <input

@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { UserProfile } from "@/types/auth";
 import { ProfileRow } from "@/types/database";
 import { UserRole, USER_ROLES } from "@/constants/auth";
-import { getRegisteredSuperAdmin } from "@/features/setup/actions/setup-actions";
+import { resolveDatabaseRole } from "@/lib/auth/authorization";
 
 /**
  * Retrieves the current authenticated user profile from Supabase Auth & public.profiles table.
@@ -24,26 +24,7 @@ export async function getCurrentUser(options?: { ignoreImpersonation?: boolean }
     } = await supabase.auth.getUser();
 
     if (authError || !authUser) {
-      // Check registered Super Admin fallback
-      const registeredAdmin = await getRegisteredSuperAdmin();
-      if (registeredAdmin) {
-        baseUser = {
-          id: "setup-admin-id",
-          email: registeredAdmin.email,
-          fullName: registeredAdmin.fullName,
-          avatarUrl: null,
-          role: USER_ROLES.ADMIN,
-          phone: null,
-          companyName: "NexusOS Enterprise",
-          timezone: "UTC",
-          language: "en",
-          accountStatus: "active",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-      } else {
-        return null;
-      }
+      return null;
     } else {
       // 2. Retrieve profile from public.profiles
       const { data: profile } = await (supabase as any)
@@ -55,33 +36,22 @@ export async function getCurrentUser(options?: { ignoreImpersonation?: boolean }
       const typedProfile = profile as ProfileRow | null;
 
       if (!typedProfile) {
-        // Fallback profile if database record hasn't synced yet
-        baseUser = {
-          id: authUser.id,
-          email: authUser.email || "",
-          fullName: authUser.user_metadata?.full_name || null,
-          avatarUrl: authUser.user_metadata?.avatar_url || null,
-          role: (authUser.user_metadata?.role as UserRole) || USER_ROLES.ADMIN,
-          phone: null,
-          companyName: authUser.user_metadata?.company_name || null,
-          timezone: "UTC",
-          language: "en",
-          accountStatus: "active",
-          createdAt: authUser.created_at,
-          updatedAt: authUser.updated_at || authUser.created_at,
-        };
+        return null;
       } else {
         // Block soft-deleted or suspended users on the server
         if (typedProfile.deleted_at || typedProfile.account_status === "suspended") {
           return null;
         }
 
+        const role = resolveDatabaseRole(typedProfile.role);
+        if (!role) return null;
+
         baseUser = {
           id: typedProfile.id,
           email: typedProfile.email,
           fullName: typedProfile.full_name,
           avatarUrl: typedProfile.avatar_url,
-          role: typedProfile.role as UserRole,
+          role,
           phone: typedProfile.phone,
           companyName: typedProfile.company_name,
           timezone: typedProfile.timezone || "UTC",

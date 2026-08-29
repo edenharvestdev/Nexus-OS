@@ -16,6 +16,8 @@ import {
 } from "../schemas/service-schema";
 import { requireAdmin, requireClient } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { protectCredential } from "@/lib/security/credential-secret-provider";
 import { createInvoiceAction } from "@/features/billing/actions/billing-actions";
 
 function getAdmin() {
@@ -197,7 +199,7 @@ export async function createServiceTemplateAction(rawValues: any) {
 
 export async function getClientServicesAction(filters: ServiceFilters = {}) {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   let query = supabase
     .from("services")
@@ -213,7 +215,7 @@ export async function getClientServicesAction(filters: ServiceFilters = {}) {
     const { data: clientRec } = await supabase
       .from("clients")
       .select("id")
-      .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+      .eq("profile_id", user.id)
       .limit(1)
       .maybeSingle();
 
@@ -411,7 +413,7 @@ export async function assignClientServiceAction(rawValues: any) {
         internal_notes: data.internalNotes || null,
         tags: data.tags || [],
       },
-      created_by: user.id !== "setup-admin-id" ? user.id : null,
+      created_by: user.id,
     })
     .select()
     .single();
@@ -665,14 +667,12 @@ export async function renewServiceAction(serviceId: string) {
 // ── CREDENTIALS VAULT ACTIONS ────────────────────────────────────────────────
 
 export async function getServiceCredentialsAction(serviceId: string) {
-  const user = await requireAdmin().catch(() => null) || await requireClient().catch(() => null);
-  if (!user) return { success: false, error: "Unauthorized" };
-
-  const supabase = getAdmin();
+  const user = await requireClient();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   let query = supabase
     .from("service_credentials")
-    .select("*")
+    .select("id, service_id, credential_name, username, login_url, is_client_visible, created_at")
     .eq("service_id", serviceId)
     .order("created_at", { ascending: false });
 
@@ -691,11 +691,11 @@ export async function getServiceCredentialsAction(serviceId: string) {
     serviceId: c.service_id,
     credentialName: c.credential_name || "Login Credentials",
     username: c.username || undefined,
-    password: c.encrypted_password || undefined,
+    password: undefined,
     loginUrl: c.login_url || undefined,
-    apiKey: c.api_key || undefined,
-    licenseKey: c.license_key || undefined,
-    secretNotes: c.secret_notes || undefined,
+    apiKey: undefined,
+    licenseKey: undefined,
+    secretNotes: undefined,
     isClientVisible: Boolean(c.is_client_visible),
     createdAt: c.created_at,
   }));
@@ -717,20 +717,37 @@ export async function createServiceCredentialAction(values: {
   const user = await requireAdmin();
   const supabase = getAdmin();
 
+  let protectedSecrets: {
+    password: string | null;
+    apiKey: string | null;
+    licenseKey: string | null;
+    secretNotes: string | null;
+  };
+  try {
+    protectedSecrets = {
+      password: values.password ? await protectCredential(values.password) : null,
+      apiKey: values.apiKey ? await protectCredential(values.apiKey) : null,
+      licenseKey: values.licenseKey ? await protectCredential(values.licenseKey) : null,
+      secretNotes: values.secretNotes ? await protectCredential(values.secretNotes) : null,
+    };
+  } catch {
+    return { success: false, error: "Approved credential secret provider is not configured." };
+  }
+
   const { data: newCred, error } = await supabase
     .from("service_credentials")
     .insert({
       service_id: values.serviceId,
       credential_name: values.credentialName,
       username: values.username || null,
-      encrypted_password: values.password || null,
+      encrypted_password: protectedSecrets.password,
       login_url: values.loginUrl || null,
-      api_key: values.apiKey || null,
-      license_key: values.licenseKey || null,
-      secret_notes: values.secretNotes || null,
+      api_key: protectedSecrets.apiKey,
+      license_key: protectedSecrets.licenseKey,
+      secret_notes: protectedSecrets.secretNotes,
       is_client_visible: values.isClientVisible ?? false,
     })
-    .select()
+    .select("id, service_id, credential_name, username, login_url, is_client_visible, created_at")
     .single();
 
   if (error || !newCred) {
@@ -782,7 +799,8 @@ export async function deleteServiceCredentialAction(credentialId: string) {
 }
 
 export async function getServiceActivitiesAction(serviceId: string) {
-  const supabase = getAdmin();
+  const user = await requireClient();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data, error } = await supabase
     .from("service_activities")

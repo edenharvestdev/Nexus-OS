@@ -13,6 +13,7 @@ import {
 import { requireClient, requireAdmin, requireAuth } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function getAdmin() {
   return createAdminClient() as any;
@@ -20,13 +21,13 @@ function getAdmin() {
 
 export async function getClientNotificationsAction() {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   // Find linked client record
   const { data: clientRec } = await supabase
     .from("clients")
     .select("id")
-    .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+    .eq("profile_id", user.id)
     .limit(1)
     .maybeSingle();
 
@@ -67,8 +68,8 @@ export async function getClientNotificationsAction() {
 }
 
 export async function markNotificationReadAction(id: string) {
-  await requireAuth();
-  const supabase = getAdmin();
+  const user = await requireAuth();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   await supabase
     .from("notifications")
@@ -81,12 +82,12 @@ export async function markNotificationReadAction(id: string) {
 
 export async function markAllNotificationsReadAction() {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data: clientRec } = await supabase
     .from("clients")
     .select("id")
-    .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+    .eq("profile_id", user.id)
     .limit(1)
     .maybeSingle();
 
@@ -126,8 +127,8 @@ export async function getAdminCommunicationStatsAction() {
 }
 
 export async function getAnnouncementsAction() {
-  await requireAuth();
-  const supabase = getAdmin();
+  const user = await requireAuth();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data, error } = await supabase
     .from("announcements")
@@ -271,6 +272,7 @@ export async function sendSystemNotificationAction(payload: {
   actionLabel?: string;
   templateName?: string;
 }) {
+  await requireAdmin();
   const supabase = getAdmin();
 
   // Insert in-app notification

@@ -1,0 +1,14 @@
+title = "NexusOS secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Permit documentation placeholders and committed example environment files"
+paths = [
+  '''(^|/)\.env(\..+)?\.example$''',
+  '''(^|/)docs/''',
+]
+regexes = [
+  '''(?i)(example|placeholder|replace[_-]?me|your[_-]?(key|token|secret))''',
+]

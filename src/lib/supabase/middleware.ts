@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/config/env";
 import { USER_ROLES } from "@/constants/auth";
+import { resolveDatabaseRole } from "@/lib/auth/authorization";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -37,12 +38,23 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
-  // Extract user role securely
-  const userRole = user?.user_metadata?.role || USER_ROLES.CLIENT;
+  // Resolve authority only from the database profile. Missing, suspended, or
+  // malformed profiles are unauthorised even when an Auth session exists.
+  let userRole = null;
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, account_status, deleted_at")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile && !profile.deleted_at && profile.account_status !== "suspended") {
+      userRole = resolveDatabaseRole(profile.role);
+    }
+  }
 
   // Protect Admin Routes (/admin/*)
   if (pathname.startsWith("/admin")) {
-    if (!user) {
+    if (!user || !userRole) {
       url.pathname = "/login";
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
@@ -57,7 +69,7 @@ export async function updateSession(request: NextRequest) {
 
   // Protect Client Portal Routes (/client/*)
   if (pathname.startsWith("/client")) {
-    if (!user) {
+    if (!user || !userRole) {
       url.pathname = "/login";
       url.searchParams.set("redirect", pathname);
       return NextResponse.redirect(url);
@@ -66,7 +78,7 @@ export async function updateSession(request: NextRequest) {
 
   // Protect Protected API Routes (/api/* except public auth callbacks/sessions)
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/")) {
-    if (!user) {
+    if (!user || !userRole) {
       return NextResponse.json(
         { success: false, error: "Authentication required" },
         { status: 401 }
@@ -83,7 +95,7 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect logged-in users away from auth pages (/login, /register, /forgot-password)
   const isAuthPage = ["/login", "/register", "/forgot-password"].includes(pathname);
-  if (isAuthPage && user) {
+  if (isAuthPage && user && userRole) {
     url.pathname = userRole === USER_ROLES.ADMIN ? "/admin" : "/client";
     return NextResponse.redirect(url);
   }

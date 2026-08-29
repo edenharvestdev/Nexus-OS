@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { USER_ROLES } from "@/constants/auth";
 
 export const loginSchema = z.object({
   email: z
@@ -30,11 +29,10 @@ export const registerSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
     .regex(/[0-9]/, "Password must contain at least one number"),
-  role: z.enum([USER_ROLES.ADMIN, USER_ROLES.CLIENT]).default(USER_ROLES.CLIENT),
   agreeToTerms: z
     .boolean()
     .refine((val) => val === true, "You must accept the terms and privacy policy"),
-});
+}).strict();
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 

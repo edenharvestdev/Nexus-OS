@@ -13,6 +13,7 @@ import {
 import { requireClient, requireAdmin, requireAuth } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function getAdmin() {
   return createAdminClient() as any;
@@ -60,7 +61,7 @@ function mapRowToTicket(row: any, isClientUser: boolean = false): SupportTicket 
 
 export async function getSupportTicketsAction(filters: TicketFilters = {}) {
   const user = await requireAuth();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   let query = supabase
     .from("support_tickets")
@@ -77,7 +78,7 @@ export async function getSupportTicketsAction(filters: TicketFilters = {}) {
     const { data: clientRec } = await supabase
       .from("clients")
       .select("id")
-      .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+      .eq("profile_id", user.id)
       .limit(1)
       .maybeSingle();
 
@@ -127,7 +128,7 @@ export async function getSupportTicketsAction(filters: TicketFilters = {}) {
 
 export async function getTicketDetailsAction(ticketId: string) {
   const user = await requireAuth();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data: row, error } = await supabase
     .from("support_tickets")
@@ -179,13 +180,13 @@ export async function createSupportTicketAction(values: {
   serviceId?: string;
 }) {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   // Find linked client record
   const { data: clientRec } = await supabase
     .from("clients")
     .select("id")
-    .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+    .eq("profile_id", user.id)
     .limit(1)
     .maybeSingle();
 
@@ -259,7 +260,7 @@ export async function addTicketMessageAction(
   attachments: any[] = []
 ) {
   const user = await requireAuth();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   if (user.role === "client" && isInternal) {
     return { success: false, error: "Unauthorized attempt to create internal note." };
@@ -309,7 +310,7 @@ export async function addTicketMessageAction(
 
 export async function updateTicketStatusAction(ticketId: string, status: TicketStatus) {
   const user = await requireAuth();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const updateData: any = { status, updated_at: new Date().toISOString() };
   if (status === "resolved") updateData.resolved_at = new Date().toISOString();

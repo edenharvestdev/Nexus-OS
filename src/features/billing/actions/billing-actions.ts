@@ -5,6 +5,7 @@ import { Invoice, InvoiceItem, InvoiceFilters, InvoiceStatus } from "@/types/bil
 import { createInvoiceSchema } from "../schemas/billing-schema";
 import { requireAdmin, requireClient } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 function getAdmin() {
   return createAdminClient() as any;
@@ -68,7 +69,7 @@ function mapRowToInvoice(row: any): Invoice {
 
 export async function getInvoicesAction(filters: InvoiceFilters = {}) {
   const user = await requireClient();
-  const supabase = getAdmin();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   let query = supabase
     .from("invoices")
@@ -84,7 +85,7 @@ export async function getInvoicesAction(filters: InvoiceFilters = {}) {
     const { data: clientRec } = await supabase
       .from("clients")
       .select("id")
-      .or(`profile_id.eq.${user.id},primary_email.eq.${user.email}`)
+      .eq("profile_id", user.id)
       .limit(1)
       .maybeSingle();
 
@@ -153,8 +154,8 @@ export async function getInvoicesAction(filters: InvoiceFilters = {}) {
 }
 
 export async function getInvoiceByIdAction(id: string) {
-  await requireAdmin();
-  const supabase = getAdmin();
+  const user = await requireClient();
+  const supabase = user.role === "admin" ? getAdmin() : await createServerSupabaseClient() as any;
 
   const { data, error } = await supabase
     .from("invoices")
@@ -222,7 +223,7 @@ export async function createInvoiceAction(rawValues: any) {
       notes: data.notes || null,
       terms: data.terms || null,
       billing_type: data.billingType,
-      created_by: user.id !== "setup-admin-id" ? user.id : null,
+      created_by: user.id,
     })
     .select()
     .single();
